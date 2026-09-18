@@ -490,7 +490,12 @@ impl Client {
         // no need to care about multiple rendezvous servers case, since it is acutally not used any more.
         // Shared state for UDP NAT test result
         if crate::get_udp_punch_enabled() && !interface.is_force_relay() {
-            if let Ok((socket, addr)) = new_direct_udp_for(&rendezvous_server).await {
+            // The first lookup on the connection path, and the one not under CONNECT_TIMEOUT: a
+            // resolver that hangs would hold the connection here for its whole retry schedule.
+            // Without the NAT test the TCP punch and the relay carry it, so a second is enough.
+            if let Ok(Ok((socket, addr))) =
+                timeout(1000, new_direct_udp_for(&rendezvous_server)).await
+            {
                 let udp_port = Arc::new(Mutex::new(0));
                 let up_cloned = udp_port.clone();
                 let socket_cloned = socket.clone();
