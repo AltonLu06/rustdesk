@@ -83,7 +83,9 @@ pub const MAX_RENDEZVOUS_MESSAGE: usize = 128 * 1024;
 /// queue hold 64 messages' worth.
 const MAX_ICE_CANDIDATE_LEN: usize = 4 * 1024;
 
-/// `connect_tcp` to the rendezvous server, bounded before anything is read from it.
+/// `connect_tcp` to the rendezvous server, bounded before anything is read from it. For the
+/// signaling channel only: the /api/ tunnel answers with a body as large as the deployment's
+/// address book, so `tcp_proxy_request` stays on `connect_tcp`.
 pub async fn connect_rendezvous<
     't,
     T: IntoTargetAddr<'t>
@@ -1766,8 +1768,8 @@ mod tests {
         connect_rendezvous, connection_meta, mpsc, rendezvous_message, socket_client, tokio,
         udp_nat_listen, AnswererSlot, Arc, Duration, IceCandidate, IceRoute, IntoTargetAddr,
         Ordering, PunchHoleSent, RendezvousMediator, RendezvousMessage, Sink, ICE_DEDUP_WINDOW,
-        MAX_ICE_CANDIDATE_LEN, MAX_PENDING_REMOTE_ICE, MAX_RENDEZVOUS_MESSAGE, MAX_WEBRTC_ANSWERERS,
-        TCP_PUNCHES, UDP_PUNCHES, WEBRTC_ICE_TXS,
+        MAX_ICE_CANDIDATE_LEN, MAX_PENDING_REMOTE_ICE, MAX_RENDEZVOUS_MESSAGE,
+        MAX_WEBRTC_ANSWERERS, TCP_PUNCHES, UDP_PUNCHES, WEBRTC_ICE_TXS,
     };
     use hbb_common::{protobuf::Message as _, tcp::new_listener};
     use std::net::SocketAddr;
@@ -1903,8 +1905,10 @@ mod tests {
         use hbb_common::tokio::io::AsyncWriteExt;
         let listener = new_listener("127.0.0.1:0", false).await.unwrap();
         let addr = listener.local_addr().unwrap();
-        let (conn, accepted) =
-            tokio::join!(connect_rendezvous(addr.to_string(), 3000), listener.accept());
+        let (conn, accepted) = tokio::join!(
+            connect_rendezvous(addr.to_string(), 3000),
+            listener.accept()
+        );
         let (mut conn, (mut server, _)) = (conn.unwrap(), accepted.unwrap());
 
         let n = MAX_RENDEZVOUS_MESSAGE + 1;
@@ -1960,7 +1964,10 @@ mod tests {
             )
             .await
             .unwrap();
-        assert!(rx.try_recv().is_err(), "an oversize candidate must not be queued");
+        assert!(
+            rx.try_recv().is_err(),
+            "an oversize candidate must not be queued"
+        );
 
         mediator
             .handle_resp(
