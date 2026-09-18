@@ -39,12 +39,10 @@ pub fn effective_window(advertised: u32) -> u32 {
     advertised.max(INITIAL_WINDOW)
 }
 
-/// For a tunnel's stream once multiplexing is agreed, on both sides. The
-/// WebSocket and WebRTC codecs carry caps of their own.
+/// For a tunnel's stream once multiplexing is agreed, on both sides, whatever
+/// carries it: the WebSocket and WebRTC codecs' own caps are 64 MiB and 1 GiB.
 pub fn cap_packet_size(stream: &mut hbb_common::Stream) {
-    if let hbb_common::Stream::Tcp(s) = stream {
-        s.0.codec_mut().set_max_packet_length(MAX_PACKET);
-    }
+    stream.set_max_packet_length(MAX_PACKET);
 }
 
 /// What a `data` frame of this length costs its channel's window.
