@@ -1216,7 +1216,19 @@ impl RendezvousMediator {
     ) -> ResultType<()> {
         let mut msg_out = Message::new();
         msg_out.set_punch_hole_sent(msg_punch);
-        let (socket, addr) = new_direct_udp_for(&self.host).await?;
+        // To the address the registration runs on, which `start_udp` proved reachable and keeps
+        // current across rebinds. Resolving the host again could name an address the server does
+        // not answer on - an AAAA beside a daemon bound to v4 - and a reply sent there is lost.
+        let (socket, addr) = match &self.addr {
+            TargetAddr::Ip(addr) => (
+                Arc::new(
+                    tokio::net::UdpSocket::bind(Config::get_any_listen_addr(addr.is_ipv4()))
+                        .await?,
+                ),
+                *addr,
+            ),
+            _ => new_direct_udp_for(&self.host).await?,
+        };
         let data = msg_out.write_to_bytes()?;
         socket.send_to(&data, addr).await?;
         // The reply is out, and with it the answer and the v6 address: declined is the listen
